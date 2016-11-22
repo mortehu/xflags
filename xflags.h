@@ -1,5 +1,5 @@
-#ifndef CFLAGS_H_
-#define CFLAGS_H_ 1
+#ifndef XFLAGS_H_
+#define XFLAGS_H_ 1
 
 #include <cstdint>
 #include <functional>
@@ -8,9 +8,9 @@
 
 #include <getopt.h>
 
-namespace cflags {
+namespace xflags {
 
-// Pointer to the function the cflags library will use to handle fatal error
+// Pointer to the function the xflags library will use to handle fatal error
 // errors.  It is supposed to never return, although this is not a requirement.
 //
 // By default, this variable points to `errx`.
@@ -46,7 +46,7 @@ void parse_flag(int val, const char* optarg);
 // Handles basic word-wrapping and line breaks.
 void print_help();
 
-#define CFLAGS_SECTION __attribute__((section("cflags")))
+#define XFLAGS_SECTION __attribute__((section("xflags")))
 
 // Exports a variable so that it can be set from the command line.
 //
@@ -54,23 +54,24 @@ void print_help();
 //
 //     int width;
 //     std::string style;
-//     CFLAGS_EXPORT(width, "COLS", "set output width to COLS");
-//     CFLAGS_EXPORT(time_style, "STYLE",
+//     XFLAGS_EXPORT(width, "COLS", "set output width to COLS");
+//     XFLAGS_EXPORT(time_style, "STYLE",
 //                   "show times using style STYLE:\n"
 //                   "full-iso: YYYY-MM-DDTHH:MM:SS\n"
 //                   "+FORMAT: custom format");
-#define CFLAGS_EXPORT(var_name, var_placeholder, var_description)    \
-  static_assert(::cflags::Parser<decltype(var_name)>::ok,            \
+#define XFLAGS_EXPORT(var_name, var_placeholder, var_description)    \
+  static_assert(::xflags::Parser<decltype(var_name)>::ok,            \
                 "No parser for type");                               \
-  static const ::cflags::FlagInfo cflags__info_##var_name = {        \
+  static const ::xflags::FlagInfo xflags__info_##var_name = {        \
       .name = #var_name,                                             \
-      .parse = ::cflags::Parser<decltype(var_name)>::parse,          \
+      .parse = ::xflags::Parser<decltype(var_name)>::parse,          \
       .description = var_description,                                \
       .placeholder = var_placeholder,                                \
       .file = __FILE__,                                              \
       .data = reinterpret_cast<void*>(&var_name)};                   \
-  const ::cflags::FlagInfo* const cflags_##var_name CFLAGS_SECTION = \
-      &cflags__info_##var_name;
+  extern const ::xflags::FlagInfo* const xflags_##var_name XFLAGS_SECTION; \
+  const ::xflags::FlagInfo* const xflags_##var_name XFLAGS_SECTION = \
+      &xflags__info_##var_name;
 
 struct FlagInfo {
   const char* name;
@@ -90,7 +91,7 @@ struct Parser {
   }
 };
 
-#define CFLAGS_DECLARE_PARSER(type)                                           \
+#define XFLAGS_DECLARE_PARSER(type)                                           \
   template <>                                                                 \
   struct Parser<type> {                                                       \
     static constexpr bool ok = true;                                          \
@@ -98,18 +99,18 @@ struct Parser {
     static bool parse(void* target, const char* string, const char** endptr); \
   }
 
-CFLAGS_DECLARE_PARSER(float);
-CFLAGS_DECLARE_PARSER(double);
-CFLAGS_DECLARE_PARSER(long double);
-CFLAGS_DECLARE_PARSER(int8_t);
-CFLAGS_DECLARE_PARSER(uint8_t);
-CFLAGS_DECLARE_PARSER(int16_t);
-CFLAGS_DECLARE_PARSER(uint16_t);
-CFLAGS_DECLARE_PARSER(int32_t);
-CFLAGS_DECLARE_PARSER(uint32_t);
-CFLAGS_DECLARE_PARSER(int64_t);
-CFLAGS_DECLARE_PARSER(uint64_t);
-CFLAGS_DECLARE_PARSER(std::string);
+XFLAGS_DECLARE_PARSER(float);
+XFLAGS_DECLARE_PARSER(double);
+XFLAGS_DECLARE_PARSER(long double);
+XFLAGS_DECLARE_PARSER(int8_t);
+XFLAGS_DECLARE_PARSER(uint8_t);
+XFLAGS_DECLARE_PARSER(int16_t);
+XFLAGS_DECLARE_PARSER(uint16_t);
+XFLAGS_DECLARE_PARSER(int32_t);
+XFLAGS_DECLARE_PARSER(uint32_t);
+XFLAGS_DECLARE_PARSER(int64_t);
+XFLAGS_DECLARE_PARSER(uint64_t);
+XFLAGS_DECLARE_PARSER(std::string);
 
 // Parser for other string types.
 template <typename Char, typename Traits, typename Allocator>
@@ -159,6 +160,9 @@ struct Parser<std::vector<U>> {
   }
 };
 
-}  // namespace cflags
+extern const FlagInfo* begin;
+extern const FlagInfo* end;
 
-#endif  // !CFLAGS_H_
+}  // namespace xflags
+
+#endif  // !XFLAGS_H_

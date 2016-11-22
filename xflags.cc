@@ -5,8 +5,7 @@
 #include <limits>
 #include <type_traits>
 
-#include "cflags-internal.h"
-#include "cflags.h"
+#include "xflags.h"
 
 #include <err.h>
 #include <sys/ioctl.h>
@@ -14,7 +13,7 @@
 #include <sysexits.h>
 #include <unistd.h>
 
-namespace cflags {
+namespace xflags {
 
 void (*error_handler)(int eval, const char* fmt, ...) = errx;
 
@@ -104,12 +103,11 @@ bool Parser<std::string>::parse(void* target, const char* string,
 
 std::vector<option> get_options(int val_base) {
   std::vector<option> options;
-  options.reserve(&cflags__end - &cflags__begin);
+  options.reserve(&end - &begin);
 
   int option_idx = 1;
-  for (int option_idx = 1; &cflags__begin + option_idx != &cflags__end;
-       ++option_idx) {
-    const FlagInfo& info = **(&cflags__begin + option_idx);
+  for (int option_idx = 1; &begin + option_idx != &end; ++option_idx) {
+    const FlagInfo& info = **(&begin + option_idx);
 
     options.emplace_back(option{info.name, required_argument, nullptr,
                                 option_idx + static_cast<int>(val_base)});
@@ -119,14 +117,14 @@ std::vector<option> get_options(int val_base) {
 }
 
 void parse_flag(int val, const char* optarg) {
-  static const auto option_count = &cflags__end - &cflags__begin - 1;
+  static const auto option_count = &end - &begin - 1;
 
-  if (val < 1 || &cflags__begin + val >= &cflags__end) {
+  if (val < 1 || &begin + val >= &end) {
     error_handler(EXIT_FAILURE, "Invalid option value");
     return;
   }
 
-  const FlagInfo& info = **(&cflags__begin + val);
+  const FlagInfo& info = **(&begin + val);
 
   const char* endptr = nullptr;
   if (!info.parse(info.data, optarg, &endptr))
@@ -161,13 +159,13 @@ void parse(int argc, char** argv) {
   if (do_print_help) {
     std::cout << "Usage: " << argv[0] << " [OPTION]...\n\n";
     print_help();
-    std::cout << "      --help                 display help and exit\n";
+    std::cout << "      --help                 display this help and exit\n";
     std::exit(EXIT_SUCCESS);
   }
 }
 
 void print_help() {
-  static const auto option_count = &cflags__end - &cflags__begin - 1;
+  static const auto option_count = &end - &begin - 1;
   if (option_count == 0) return;
 
   uint16_t column_count = 80;
@@ -179,10 +177,9 @@ void print_help() {
   }
 
   const char* file = nullptr;
-  const bool multiple_files =
-      (*(&cflags__begin + 1))->file != (*(&cflags__end - 1))->file;
+  const bool multiple_files = (*(&begin + 1))->file != (*(&end - 1))->file;
 
-  for (auto fp = &cflags__begin + 1; fp != &cflags__end; ++fp) {
+  for (auto fp = &begin + 1; fp != &end; ++fp) {
     const FlagInfo& info = **fp;
 
     if (info.file != file && multiple_files) {

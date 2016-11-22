@@ -1,0 +1,130 @@
+.TH XFLAGS 1 "Nov 2016"
+.PP 
+.SH "NAME" 
+xflags \- turn variables into command line arguments
+.SH "DESCRIPTION" 
+.PP 
+To use the \fBxflags\fP library, you must add the \fB0_xflags_before.cc\fP source
+file to your project, and it must be the first file passed to the linker
+command line.  If you don't add it, you'll likely see an linker error message
+like "undefined reference to `xflags::begin'".  If it's not the first file
+linked, the program will compile and run, but some flags might be missing.
+.PP
+To create a command line flag from a variable, just declare the variable as
+usual, and call the preprocessor macro \fBXFLAGS_EXPORT(name, placeholder,
+description)\fP.  The \fBname\fP argument should be the name of the variable,
+the \fBplaceholder\fP argument should be a string representing the variable's
+value, and the \fBdescription\fP argument should be a string describing the
+purpose of the variable.  The three values appear in the generated \fB--help\fP
+output as follows:
+.RS 4
+.sp
+--\fBname\fP=\fBplaceholder\fP  \fBdescription\fP
+.RE
+.PP
+Example:
+.RS 4
+.sp
+int columns = 80, rows = 24;
+.br
+XFLAGS_EXPORT(columns, "COLS", "set display width to COLS");
+.br
+XFLAGS_EXPORT(rows,    "ROWS", "set display height to ROWS");
+.br
+
+.br
+::xflags::parse(argc, argv);
+.RE
+.sp
+which generates the following \fB--help\fP output:
+.RS 4
+.sp
+--columns=COLS      set display width to COLS
+.br
+--rows=ROWS         set display height to ROWS
+.RE
+.PP
+The library supports all integer types, \fBbool\fP, \fBfloat\fP, \fBdouble\fP,
+\fBlong double\fP, \fBstd::basic_string\fP, and \fBstd::vector\fP of any of
+the previous type.  You can add support for additional types by specializing
+the \fB::xflags::Parser\fP template class.
+.PP
+Note that the \fBXFLAGS_EXPORT\fP macro must be called in the global scope.  It
+cannot be called inside an anonymous namespace.
+.SH "LISTS"
+.PP
+The \fBxflags\fP library makes a distinction between \fIscalar\fR and
+\fIlist\fR argument parsers.  A \fIlist\fR parser invokes the underlying
+\fIscalar\fR parser each time the argument is repeated:
+.RS 4
+.sp
+--arg=first --arg=second --arg=third
+.RE
+.PP
+If the underlying \fIscalar\fR type cannot contain commas, the \fIlist\fR
+parser will allow passing multiple values in a single argument:
+.RS 4
+.sp
+--arg=first,second,third
+.RE
+.SH "CUSTOM TYPES"
+.PP
+Here's an example of how to implement a parser for a custom type:
+.RS 4
+.sp
+enum class MyCustomType { A, B };
+.br
+
+.br
+namespace xflags {
+.br
+
+.br
+template<> struct Parser<MyCustomType> : public ScalarParser {
+.br
+  static bool parse(void* target, const char* string, const char** endptr) {
+.br
+    if (!std::strcmp(string, "A"))
+.br
+      *reinterpret_cast<MyCustomType*>(target) = MyCustomType::A;
+.br
+    else if (!std::strcmp(string, "B"))
+.br
+      *reinterpret_cast<MyCustomType*>(target) = MyCustomType::B;
+.br
+    else
+.br
+      return false;
+.br
+
+.br
+    *endptr = string + 1;  // Tell the caller we parsed one char.
+.br
+
+.br
+    return true;
+.br
+  }
+.br
+};
+.br
+
+.br
+}  // namespace xflags
+.RE
+.SH "XFLAGS-COMPLETE"
+.PP
+The \fBxflags-complete\fP command can be used with bash to facilitate
+programmable completion.  It supports the command interface used by bash's
+\fBcomplete\fP builtin.  Run the following command and/or add it to your
+\fB.bashrc\fP to make use of this for a given program:
+.RS 4
+.sp
+complete -C xflags-complete myprogram
+.RE
+.PP
+\fBxflags-complete\fP works without loading any code from the program
+specified.  Instead, it reads the \fB.xflags-names\fP section of the ELF file.
+.SH "AUTHOR"  
+.PP  
+The xflags package was written by Morten Hustveit <morten.hustveit@gmail.com>.

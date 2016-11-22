@@ -2,7 +2,6 @@
 #define XFLAGS_H_ 1
 
 #include <cstdint>
-#include <functional>
 #include <string>
 #include <vector>
 
@@ -18,6 +17,9 @@ extern void (*error_handler)(int eval, const char* fmt, ...);
 
 // Parses a command line.  If you use this function, you don't need to call
 // `get_options`, `parse_flag`, or `print_help` yourself.
+//
+// In addition to all the options exported with `XFLAGS_EXPORT()`, this
+// function adds a `--help` option.
 //
 // This function will exit if one of the command line arguments is `--help`.
 void parse(int argc, char** argv);
@@ -46,7 +48,8 @@ void parse_flag(int val, const char* optarg);
 // Handles basic word-wrapping and line breaks.
 void print_help();
 
-#define XFLAGS_SECTION __attribute__((section("xflags")))
+#define XFLAGS_SECTION __attribute__((section(".xflags")))
+#define XFLAGS_NAME_SECTION __attribute__((section(".xflags-names")))
 
 // Exports a variable so that it can be set from the command line.
 //
@@ -59,18 +62,22 @@ void print_help();
 //                   "show times using style STYLE:\n"
 //                   "full-iso: YYYY-MM-DDTHH:MM:SS\n"
 //                   "+FORMAT: custom format");
-#define XFLAGS_EXPORT(var_name, var_placeholder, var_description)    \
-  static_assert(::xflags::Parser<decltype(var_name)>::ok,            \
-                "No parser for type");                               \
-  static const ::xflags::FlagInfo xflags__info_##var_name = {        \
-      .name = #var_name,                                             \
-      .parse = ::xflags::Parser<decltype(var_name)>::parse,          \
-      .description = var_description,                                \
-      .placeholder = var_placeholder,                                \
-      .file = __FILE__,                                              \
-      .data = reinterpret_cast<void*>(&var_name)};                   \
+#define XFLAGS_EXPORT(var_name, var_placeholder, var_description)          \
+  static_assert(::xflags::Parser<decltype(var_name)>::ok,                  \
+                "No parser for type");                                     \
+  extern const char xflags__name_##var_name[] XFLAGS_NAME_SECTION;         \
+  const char xflags__name_##var_name[] XFLAGS_NAME_SECTION = #var_name;    \
+  static const ::xflags::FlagInfo xflags__info_##var_name = {              \
+      .name = xflags__name_##var_name,                                     \
+      .parse = ::xflags::Parser<decltype(var_name)>::parse,                \
+      .description = var_description,                                      \
+      .placeholder = var_placeholder,                                      \
+      .file = __FILE__,                                                    \
+      .requires_argument =                                                 \
+          ::xflags::Parser<decltype(var_name)>::requires_argument,         \
+      .data = reinterpret_cast<void*>(&var_name)};                         \
   extern const ::xflags::FlagInfo* const xflags_##var_name XFLAGS_SECTION; \
-  const ::xflags::FlagInfo* const xflags_##var_name XFLAGS_SECTION = \
+  const ::xflags::FlagInfo* const xflags_##var_name XFLAGS_SECTION =       \
       &xflags__info_##var_name;
 
 struct FlagInfo {
@@ -79,6 +86,7 @@ struct FlagInfo {
   const char* description;
   const char* placeholder;
   const char* file;
+  const bool requires_argument;
   void* data;
 };
 
@@ -86,38 +94,49 @@ template <typename T>
 struct Parser {
   static constexpr bool ok = false;
   static constexpr bool scalar = false;
+  static constexpr bool requires_argument = false;
   static bool parse(void* target, const char* string, const char** endptr) {
     return false;
   }
 };
 
-#define XFLAGS_DECLARE_PARSER(type)                                           \
+struct ScalarParser {
+  static constexpr bool ok = true;
+  static constexpr bool scalar = true;
+  static constexpr bool requires_argument = true;
+};
+
+#define XFLAGS_DECLARE_SCALAR_PARSER(type)                                    \
   template <>                                                                 \
-  struct Parser<type> {                                                       \
-    static constexpr bool ok = true;                                          \
-    static constexpr bool scalar = true;                                      \
+  struct Parser<type> : public ScalarParser {                                 \
     static bool parse(void* target, const char* string, const char** endptr); \
   }
 
-XFLAGS_DECLARE_PARSER(float);
-XFLAGS_DECLARE_PARSER(double);
-XFLAGS_DECLARE_PARSER(long double);
-XFLAGS_DECLARE_PARSER(int8_t);
-XFLAGS_DECLARE_PARSER(uint8_t);
-XFLAGS_DECLARE_PARSER(int16_t);
-XFLAGS_DECLARE_PARSER(uint16_t);
-XFLAGS_DECLARE_PARSER(int32_t);
-XFLAGS_DECLARE_PARSER(uint32_t);
-XFLAGS_DECLARE_PARSER(int64_t);
-XFLAGS_DECLARE_PARSER(uint64_t);
-XFLAGS_DECLARE_PARSER(std::string);
+XFLAGS_DECLARE_SCALAR_PARSER(float);
+XFLAGS_DECLARE_SCALAR_PARSER(double);
+XFLAGS_DECLARE_SCALAR_PARSER(long double);
+XFLAGS_DECLARE_SCALAR_PARSER(int8_t);
+XFLAGS_DECLARE_SCALAR_PARSER(uint8_t);
+XFLAGS_DECLARE_SCALAR_PARSER(int16_t);
+XFLAGS_DECLARE_SCALAR_PARSER(uint16_t);
+XFLAGS_DECLARE_SCALAR_PARSER(int32_t);
+XFLAGS_DECLARE_SCALAR_PARSER(uint32_t);
+XFLAGS_DECLARE_SCALAR_PARSER(int64_t);
+XFLAGS_DECLARE_SCALAR_PARSER(uint64_t);
+XFLAGS_DECLARE_SCALAR_PARSER(std::string);
+
+// Parser for bool.
+template <>
+struct Parser<bool> {
+  static constexpr bool ok = true;
+  static constexpr bool scalar = true;
+  static constexpr bool requires_argument = false;
+  static bool parse(void* target, const char* string, const char** endptr);
+};
 
 // Parser for other string types.
 template <typename Char, typename Traits, typename Allocator>
-struct Parser<std::basic_string<Char, Traits, Allocator>> {
-  static constexpr bool ok = true;
-  static constexpr bool scalar = true;
-
+struct Parser<std::basic_string<Char, Traits, Allocator>> : public ScalarParser {
   static bool parse(void* target, const char* string, const char** endptr) {
     const auto length = std::char_traits<char>::length(string);
     reinterpret_cast<std::basic_string<Char, Traits, Allocator>*>(target)
@@ -127,6 +146,11 @@ struct Parser<std::basic_string<Char, Traits, Allocator>> {
   }
 };
 
+// Parser for container types.  To add multiple values to a container, use the
+// same option multiple times, e.g. --foo=1 --foo=2 --foo=3.
+//
+// If the underlying data type cannot contain commas, --foo=1,2,3 will also
+// work.
 template <typename Container>
 inline bool parse_into_container(Container& target, const char* string,
                                  const char** endptr) {
@@ -143,15 +167,13 @@ inline bool parse_into_container(Container& target, const char* string,
   }
 }
 
-// Parser for vector types.  To add multiple values to a vector, use the same
-// option multiple times, e.g. --foo=1 --foo=2 --foo=3.
-//
-// If the underlying data type cannot contain commas, --foo=1,2,3 will also
-// work.
+// TODO(mortehu): Is there a way to rewrite this so that it works with any
+// container type?
 template <typename U>
 struct Parser<std::vector<U>> {
   static constexpr bool ok = true;
   static constexpr bool scalar = false;
+  static constexpr bool requires_argument = true;
 
   static bool parse(void* target, const char* string, const char** endptr) {
     auto& vector = *reinterpret_cast<std::vector<U>*>(target);
@@ -160,6 +182,7 @@ struct Parser<std::vector<U>> {
   }
 };
 
+// Internal use only.
 extern const FlagInfo* begin;
 extern const FlagInfo* end;
 

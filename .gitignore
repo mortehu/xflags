@@ -6,6 +6,7 @@
 *.lo
 *.log
 *.o
+*.pc
 *.so
 *.status
 *.sw?
@@ -27,5 +28,6 @@
 /example
 /install-sh
 /missing
+/xflags-complete
 core
 core.*

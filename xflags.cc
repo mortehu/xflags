@@ -19,6 +19,8 @@ void (*error_handler)(int eval, const char* fmt, ...) = errx;
 
 namespace {
 
+const char nul = '\0';
+
 // Parses signed integers.
 template <typename T>
 typename std::enable_if<std::numeric_limits<T>::is_signed, bool>::type
@@ -94,6 +96,37 @@ DEFINE_INT_PARSER(uint32_t);
 DEFINE_INT_PARSER(int64_t);
 DEFINE_INT_PARSER(uint64_t);
 
+bool Parser<bool>::parse(void* target, const char* string,
+                         const char** endptr) {
+  if (string == nullptr) {
+    *reinterpret_cast<bool*>(target) = true;
+    *endptr = &nul;
+    return true;
+  }
+
+  const auto length = std::char_traits<char>::length(string);
+
+  if ((1 == length &&
+       0 == std::char_traits<char>::compare(string, "1", length)) ||
+      (4 == length &&
+       0 == std::char_traits<char>::compare(string, "true", length))) {
+    *reinterpret_cast<bool*>(target) = true;
+    *endptr = string + length;
+    return true;
+  }
+
+  if ((1 == length &&
+       0 == std::char_traits<char>::compare(string, "0", length)) ||
+      (5 == length &&
+       0 == std::char_traits<char>::compare(string, "false", length))) {
+    *reinterpret_cast<bool*>(target) = false;
+    *endptr = string + length;
+    return true;
+  }
+
+  return false;
+}
+
 bool Parser<std::string>::parse(void* target, const char* string,
                                 const char** endptr) {
   reinterpret_cast<std::string*>(target)->assign(string);
@@ -109,8 +142,10 @@ std::vector<option> get_options(int val_base) {
   for (int option_idx = 1; &begin + option_idx != &end; ++option_idx) {
     const FlagInfo& info = **(&begin + option_idx);
 
-    options.emplace_back(option{info.name, required_argument, nullptr,
-                                option_idx + static_cast<int>(val_base)});
+    options.emplace_back(
+        option{info.name,
+               info.requires_argument ? required_argument : optional_argument,
+               nullptr, option_idx + static_cast<int>(val_base)});
   }
 
   return options;
@@ -188,15 +223,20 @@ void print_help() {
       file = info.file;
     }
     const auto name_length = std::char_traits<char>::length(info.name);
-    const auto placeholder_length =
-        std::char_traits<char>::length(info.placeholder);
 
     std::cout << "      --";
     std::cout.write(info.name, name_length);
-    std::cout.put('=');
-    std::cout.write(info.placeholder, placeholder_length);
 
-    size_t column = name_length + placeholder_length + 9;
+    size_t column = name_length + 8;
+
+    if (info.placeholder) {
+      const auto placeholder_length =
+          std::char_traits<char>::length(info.placeholder);
+      std::cout.put('=');
+      std::cout.write(info.placeholder, placeholder_length);
+
+      column += placeholder_length + 1;
+    }
 
     if (column >= 28) {
       std::cout.put('\n');
